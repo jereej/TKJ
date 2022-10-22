@@ -4,7 +4,7 @@ TKJ-kurssin projekti
 
 Tarkoitus tehdä Tamagotchi Sensortagilla
 
-Tekijät:
+Tekijät:\
 Jere Jacklin \
 Tommi Jokinen \
 Jeremias Nevalainen
