@@ -4,8 +4,8 @@
  * Arvon nostaminen tapahtuu activate-komennolla activate(n,n,n)
  *
  * buzzer: esim.
- * jos PET-arvo on alle x, niin sensortag piippaa 3 lyhytt√§ piippausta
- * jos EXERCISE-arvo on alle x, niin sensortag piippaa pidemp√§√§n
+ * jos PET-arvo on alle x, niin sensortag piippaa 3 lyhytt‰ piippausta
+ * jos EXERCISE-arvo on alle x, niin sensortag piippaa pidemp‰‰n
  * kun kaikki arvot ovat 10, niin buzzer "soittaa" jonkin lyhyen melodian
  *
  *
@@ -41,10 +41,11 @@
 
 #define STACKSIZE 2048
 Char taskStack[STACKSIZE];
+/*Char task2Stack[STACKSIZE];*/
 
 //global variables for states
-static int EAT = 10;
-static int EXERCISE = 10;
+static int EAT = 1;
+static int EXERCISE = 1;
 static int PET = 1;
 
 // Button and LED global variables
@@ -56,6 +57,16 @@ static PIN_State ledState;
 // MPU global variables
 static PIN_Handle hMpuPin;
 static PIN_State  MpuPinState;
+
+// Buzzer global variables
+/*static PIN_Handle hBuzzer;
+static PIN_State sBuzzer;*/
+
+// Buzzer config
+PIN_Config cBuzzer[] = {
+  Board_BUZZER | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
+  PIN_TERMINATE
+};
 
 //MPU power pin
 static PIN_Config MpuPinConfig[] = {
@@ -69,7 +80,6 @@ static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
     .pinSCL = Board_I2C0_SCL1
 };
 
-
 //Button and LED config
 PIN_Config buttonConfig[] = {
    Board_BUTTON0  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_NEGEDGE,
@@ -81,25 +91,52 @@ PIN_Config ledConfig[] = {
    PIN_TERMINATE
 };
 
-void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
+void activate(int eatValue, int petValue, int exerciseValue){
 
+    if (PET < 10){
+        PET += petValue;
+    } else if (PET >= 10){
+        System_printf("Tamagotchi doesn't want any more pets!\n");
+        System_flush();
+    }
+
+    if (EAT < 10){
+        EAT += eatValue;
+    } else if (EAT >= 10){
+        System_printf("Tamagotchi doesn't want to eat any more!\n");
+        System_flush();
+    }
+
+
+    if (EXERCISE < 10){
+        EXERCISE += exerciseValue;
+    } else if (EXERCISE >= 10){
+        System_printf("Tamagotchi is tired from exercising.\n");
+        System_flush();
+    }
+
+    if (EAT < 1){
+        EAT = 1;
+    } else if (PET < 1){
+        PET = 1;
+    } else if (EXERCISE < 1){
+        EXERCISE = 1;
+    }
+
+    System_printf("Current values, EAT: %d, PET: %d, EXERCISE: %d\n", EAT, PET, EXERCISE);
+    System_flush();
+
+}
+
+void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 
     uint_t pinValue = PIN_getOutputValue( Board_LED1 );
     pinValue = !pinValue;
     PIN_setOutputValue( ledHandle, Board_LED1, pinValue );
 
-    if (PET < 10){
-        PET++;
-        System_printf("Pet value increased to %d\n", PET);
-        System_flush();
-    } else if (PET >= 10){
-        PET = 10;
-        System_printf("Pet doesn't like u anymore\n");
-        System_flush();
-    } else {
-        PET = 1;
-        }
-    }
+    activate(0,1,0);
+
+}
 
 void mpuFxn(UArg arg0, UArg arg1) {
 
@@ -138,8 +175,8 @@ void mpuFxn(UArg arg0, UArg arg1) {
     System_printf("MPU9250: Setup and calibration OK\n");
     System_flush();
 
-
-    fpt = fopen("D:/ti/workspace/empty_CC2650STK_TI/collectdata.csv", "w");
+    //Remember to change the filepath to your own!
+    fpt = fopen("D:/ti/workspace/empty_CC2650STK_TI/defaultdata1.csv", "w");
 
     if (!fpt) {
             System_printf("Can't open file.\n");
@@ -155,31 +192,53 @@ void mpuFxn(UArg arg0, UArg arg1) {
         time++;
         fprintf(fpt,"%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", time, ax, ay, az, gx, gy, gz);
         // Sleep 100ms
-        Task_sleep(100000 / Clock_tickPeriod);
+
+        if (gy >= 50){
+            activate(0,0,1);
+        }
+
+        if (gz >= 10){
+            activate(1,0,0);
+        }
+        Task_sleep(300000 / Clock_tickPeriod);
     }
 }
 
 void valueReduce(UArg arg0, UArg arg1){
     while (1){
         Task_sleep(5000000 / Clock_tickPeriod);
-        PET--;
+        activate(0,-1,0);
         System_printf("PET value reduced to %d\n", PET);
         System_flush();
         Task_sleep(3000000 / Clock_tickPeriod);
-        EAT--;
+        activate(-1,0,0);
         System_printf("EAT value reduced to %d\n", EAT);
         System_flush();
         Task_sleep(2000000 / Clock_tickPeriod);
-        EXERCISE--;
+        activate(0,0,-1);
         System_printf("EXERCISE value reduced to %d\n", EXERCISE);
         System_flush();
         Task_sleep(5000000 / Clock_tickPeriod);
     }
 }
+
+/*Void bzrFxn(UArg arg0, UArg arg1) {
+
+  while (1) {
+    buzzerOpen(hBuzzer);
+    buzzerSetFrequency(2000);
+    Task_sleep(50000 / Clock_tickPeriod);
+    buzzerClose();
+
+    Task_sleep(950000 / Clock_tickPeriod);
+  }
+
+}*/
+
 int main (void){
 
-    Task_Handle task, task1;
-    Task_Params taskParams, task1Params;
+    Task_Handle task, task1/*, task2*/;
+    Task_Params taskParams, task1Params/*, task2Params*/;
 
     Board_initGeneral();
     Board_initI2C();
@@ -202,6 +261,11 @@ int main (void){
         System_abort("Pin open failed!");
     }
 
+    /*hBuzzer = PIN_open(&sBuzzer, cBuzzer);
+    if (hBuzzer == NULL) {
+        System_abort("Pin open failed!");
+    }*/
+
     Task_Params_init(&taskParams);
         taskParams.stackSize = STACKSIZE;
         taskParams.stack = &taskStack;
@@ -213,8 +277,16 @@ int main (void){
     Task_Params_init(&task1Params);
     task1 = Task_create((Task_FuncPtr)valueReduce, &task1Params, NULL);
     if (task1 == NULL) {
-        System_abort("Task create failed!");
+        System_abort("Task1 create failed!");
     }
+
+    /*Task_Params_init(&task2Params);
+    taskParams.stackSize = STACKSIZE;
+    taskParams.stack = &taskStack;
+    task2 = Task_create((Task_FuncPtr)bzrFxn, &taskParams, NULL);
+    if (task2 == NULL) {
+      System_abort("Task2 create failed!");
+    }*/
 
 
     /*Sanity check*/
