@@ -15,6 +15,7 @@
 
 
 #include <stdio.h>
+#include <time.h>
 
 /* XDCtools files */
 #include <xdc/std.h>
@@ -36,13 +37,15 @@
 #include "Board.h"
 #include "wireless/comm_lib.h"
 #include "sensors/mpu9250.h"
+#include "buzzer.h"
 
 #define STACKSIZE 2048
 Char taskStack[STACKSIZE];
 
+//global variables for states
 static int EAT = 10;
 static int EXERCISE = 10;
-static int PET = 10;
+static int PET = 1;
 
 // Button and LED global variables
 static PIN_Handle buttonHandle;
@@ -53,6 +56,10 @@ static PIN_State ledState;
 // MPU global variables
 static PIN_Handle hMpuPin;
 static PIN_State  MpuPinState;
+
+// Buzzer global variables
+static PIN_Handle hBuzzer;
+static PIN_State sBuzzer;
 
 //MPU power pin
 static PIN_Config MpuPinConfig[] = {
@@ -84,12 +91,24 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     uint_t pinValue = PIN_getOutputValue( Board_LED1 );
     pinValue = !pinValue;
     PIN_setOutputValue( ledHandle, Board_LED1, pinValue );
-}
 
-Void mpuFxn(UArg arg0, UArg arg1) {
+    if (PET < 10){
+        PET++;
+        System_printf("Pet value increased to %d\n", PET);
+        System_flush();
+    } else if (PET >= 10){
+        PET = 10;
+        System_printf("Pet doesn't like u anymore\n");
+        System_flush();
+    } else {
+        PET = 1;
+        }
+    }
+
+void mpuFxn(UArg arg0, UArg arg1) {
 
     float ax, ay, az, gx, gy, gz;
-    uint16_t t = 0;
+    uint16_t time = 0;
     FILE *fpt;
 
     I2C_Handle i2cMPU;
@@ -124,7 +143,7 @@ Void mpuFxn(UArg arg0, UArg arg1) {
     System_flush();
 
 
-    fpt = fopen("D:/ti/workspace/empty_CC2650STK_TI/yeet.csv", "w");
+    fpt = fopen("D:/ti/workspace/empty_CC2650STK_TI/collectdata.csv", "w");
 
     if (!fpt) {
             System_printf("Can't open file.\n");
@@ -137,19 +156,34 @@ Void mpuFxn(UArg arg0, UArg arg1) {
 
         // MPU ask data
         mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
-        t++;
-        fprintf(fpt,"%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", t, ax, ay, az, gx, gy, gz);
+        time++;
+        fprintf(fpt,"%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", time, ax, ay, az, gx, gy, gz);
         // Sleep 100ms
         Task_sleep(100000 / Clock_tickPeriod);
     }
 }
 
+void valueReduce(UArg arg0, UArg arg1){
+    while (1){
+        Task_sleep(5000000 / Clock_tickPeriod);
+        PET--;
+        System_printf("PET value reduced to %d\n", PET);
+        System_flush();
+        Task_sleep(3000000 / Clock_tickPeriod);
+        EAT--;
+        System_printf("EAT value reduced to %d\n", EAT);
+        System_flush();
+        Task_sleep(2000000 / Clock_tickPeriod);
+        EXERCISE--;
+        System_printf("EXERCISE value reduced to %d\n", EXERCISE);
+        System_flush();
+        Task_sleep(5000000 / Clock_tickPeriod);
+    }
+}
+int main (void){
 
-
-Int main (void){
-
-    Task_Handle task;
-    Task_Params taskParams;
+    Task_Handle task, task1;
+    Task_Params taskParams, task1Params;
 
     Board_initGeneral();
     Board_initI2C();
@@ -173,10 +207,16 @@ Int main (void){
     }
 
     Task_Params_init(&taskParams);
-    taskParams.stackSize = STACKSIZE;
-    taskParams.stack = &taskStack;
-    task = Task_create((Task_FuncPtr)mpuFxn, &taskParams, NULL);
-    if (task == NULL) {
+        taskParams.stackSize = STACKSIZE;
+        taskParams.stack = &taskStack;
+        task = Task_create((Task_FuncPtr)mpuFxn, &taskParams, NULL);
+        if (task == NULL) {
+            System_abort("Task create failed!");
+        }
+
+    Task_Params_init(&task1Params);
+    task1 = Task_create((Task_FuncPtr)valueReduce, &task1Params, NULL);
+    if (task1 == NULL) {
         System_abort("Task create failed!");
     }
 
