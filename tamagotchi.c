@@ -4,8 +4,8 @@
  * Arvon nostaminen tapahtuu activate-komennolla activate(n,n,n)
  *
  * buzzer: esim.
- * jos PET-arvo on alle x, niin sensortag piippaa 3 lyhytt‰ piippausta
- * jos EXERCISE-arvo on alle x, niin sensortag piippaa pidemp‰‰n
+ * jos PET-arvo on alle x, niin sensortag piippaa 3 lyhytt√§ piippausta
+ * jos EXERCISE-arvo on alle x, niin sensortag piippaa pidemp√§√§n
  * kun kaikki arvot ovat 10, niin buzzer "soittaa" jonkin lyhyen melodian
  *
  *
@@ -56,10 +56,6 @@ static PIN_State ledState;
 // MPU global variables
 static PIN_Handle hMpuPin;
 static PIN_State  MpuPinState;
-
-// Buzzer global variables
-static PIN_Handle hBuzzer;
-static PIN_State sBuzzer;
 
 //MPU power pin
 static PIN_Config MpuPinConfig[] = {
