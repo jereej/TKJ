@@ -24,12 +24,14 @@
 #include "sensors/mpu9250.h"
 #include "buzzer.h"
 
-enum state { WAITING=1, DATA_READY };
+enum state { WAITING=1, DATA_READY, BUZZER, BUZZER2 };
 enum state programState = WAITING;
+enum state buzzerState = BUZZER;
+enum state buzzerState2 = BUZZER2;
 
 #define STACKSIZE 2048
 Char taskStack[STACKSIZE];
-/*Char task2Stack[STACKSIZE];*/
+Char task2Stack[STACKSIZE];
 Char uartTaskStack[STACKSIZE];
 
 //global variables for states
@@ -48,8 +50,8 @@ static PIN_Handle hMpuPin;
 static PIN_State  MpuPinState;
 
 // Buzzer global variables
-/*static PIN_Handle hBuzzer;
-static PIN_State sBuzzer;*/
+static PIN_Handle hBuzzer;
+static PIN_State sBuzzer;
 
 // Buzzer config
 PIN_Config cBuzzer[] = {
@@ -109,6 +111,7 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
             System_flush();
 
             UART_write(uart, str, strlen(str));
+            buzzerState2 = BUZZER2;
             PET = 0;
             EAT = 0;
             EXERCISE = 0;
@@ -137,6 +140,7 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     PIN_setOutputValue( ledHandle, Board_LED1, pinValue );
 
     //activate(0,1,0);
+    buzzerState = BUZZER;
 
 }
 
@@ -198,52 +202,68 @@ void mpuFxn(UArg arg0, UArg arg1) {
 
         if (abs(gy) >= 70){
             activate(0,0,1);
+
         }
 
         if (abs(gz) >= 70){
             activate(1,0,0);
+
         }
 
         if (abs(gx) >= 150){
-                    activate(0,1,0);
-                }
+            activate(0,1,0);
+
+        }
 
         Task_sleep(300000 / Clock_tickPeriod);
     }
 }
 
-/*void valueReduce(UArg arg0, UArg arg1){
-    while (1){
-        Task_sleep(5000000 / Clock_tickPeriod);
-        activate(0,-1,0);
-        System_printf("PET value reduced to %d\n", PET);
-        System_flush();
-        Task_sleep(3000000 / Clock_tickPeriod);
-        activate(-1,0,0);
-        System_printf("EAT value reduced to %d\n", EAT);
-        System_flush();
-        Task_sleep(2000000 / Clock_tickPeriod);
-        activate(0,0,-1);
-        System_printf("EXERCISE value reduced to %d\n", EXERCISE);
-        System_flush();
-        Task_sleep(5000000 / Clock_tickPeriod);
-    }
-}*/
-
-/*Void bzrFxn(UArg arg0, UArg arg1) {
+Void bzrFxn(UArg arg0, UArg arg1) {
   while (1) {
+    if (buzzerState == BUZZER){
+
     buzzerOpen(hBuzzer);
-    buzzerSetFrequency(2000);
-    Task_sleep(50000 / Clock_tickPeriod);
+    buzzerSetFrequency(494);
+    Task_sleep(207000 / Clock_tickPeriod);
+    buzzerSetFrequency(622);
+    Task_sleep(207000 / Clock_tickPeriod);
+    buzzerSetFrequency(987);
+    Task_sleep(207000 / Clock_tickPeriod);
+    buzzerSetFrequency(932);
+    Task_sleep(103000 / Clock_tickPeriod);
+    Task_sleep(309000 / Clock_tickPeriod);
+    buzzerSetFrequency(740);
+    Task_sleep(207000 / Clock_tickPeriod);
+
+
     buzzerClose();
     Task_sleep(950000 / Clock_tickPeriod);
+    buzzerState = WAITING;
+    }
+
+    else if (buzzerState2 == BUZZER2){
+
+        buzzerOpen(hBuzzer);
+        buzzerSetFrequency(1000);
+        Task_sleep(103000 / Clock_tickPeriod);
+        buzzerSetFrequency(1500);
+        Task_sleep(103000 / Clock_tickPeriod);
+        buzzerSetFrequency(500);
+        Task_sleep(103000 / Clock_tickPeriod);
+        buzzerClose();
+        Task_sleep(950000 / Clock_tickPeriod);
+        buzzerState2 = WAITING;
+        }
+
+
   }
-}*/
+}
 
 int main (void){
 
-    Task_Handle task/*, task1, task2*/;
-    Task_Params taskParams/*, task1Params, task2Params*/;
+    Task_Handle task, task2;
+    Task_Params taskParams, task2Params;
     Task_Handle uartTaskHandle;
     Task_Params uartTaskParams;
 
@@ -270,32 +290,26 @@ int main (void){
         System_abort("Pin open failed!");
     }
 
-    /*hBuzzer = PIN_open(&sBuzzer, cBuzzer);
+    hBuzzer = PIN_open(&sBuzzer, cBuzzer);
     if (hBuzzer == NULL) {
         System_abort("Pin open failed!");
-    }*/
+    }
 
     Task_Params_init(&taskParams);
-        taskParams.stackSize = STACKSIZE;
-        taskParams.stack = &taskStack;
-        task = Task_create((Task_FuncPtr)mpuFxn, &taskParams, NULL);
-        if (task == NULL) {
-            System_abort("Task create failed!");
-        }
-
-    /*Task_Params_init(&task1Params);
-    task1 = Task_create((Task_FuncPtr)valueReduce, &task1Params, NULL);
-    if (task1 == NULL) {
-        System_abort("Task1 create failed!");
-    }*/
-
-    /*Task_Params_init(&task2Params);
     taskParams.stackSize = STACKSIZE;
     taskParams.stack = &taskStack;
-    task2 = Task_create((Task_FuncPtr)bzrFxn, &taskParams, NULL);
+    task = Task_create((Task_FuncPtr)mpuFxn, &taskParams, NULL);
+    if (task == NULL) {
+        System_abort("Task create failed!");
+    }
+
+    Task_Params_init(&task2Params);
+    task2Params.stackSize = STACKSIZE;
+    task2Params.stack = &task2Stack;
+    task2 = Task_create((Task_FuncPtr)bzrFxn, &task2Params, NULL);
     if (task2 == NULL) {
       System_abort("Task2 create failed!");
-    }*/
+    }
 
     Task_Params_init(&uartTaskParams);
     uartTaskParams.stackSize = STACKSIZE;
