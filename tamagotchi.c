@@ -1,21 +1,6 @@
-/* EAT-arvon nostaminen tapahtuu liikutettaessa sensortagia vaakatasossa (jokin kynnysehto)
- * EXERCISE-arvon nostaminen tapahtuu liikutettaessa sensortagia pystytasossa (jokin kynnysehto)
- * PET-arvon nostaminen tapahtuu nappia painamalla
- * Arvon nostaminen tapahtuu activate-komennolla activate(n,n,n)
- *
- * buzzer: esim.
- * jos PET-arvo on alle x, niin sensortag piippaa 3 lyhytt‰ piippausta
- * jos EXERCISE-arvo on alle x, niin sensortag piippaa pidemp‰‰n
- * kun kaikki arvot ovat 10, niin buzzer "soittaa" jonkin lyhyen melodian
- *
- *
- * Authors: Jere Jacklin, Tommi Jokinen, Jeremias Nevalainen
- */
-
-
-
 #include <stdio.h>
 #include <time.h>
+#include <stdlib.h>
 
 /* XDCtools files */
 #include <xdc/std.h>
@@ -39,14 +24,18 @@
 #include "sensors/mpu9250.h"
 #include "buzzer.h"
 
+enum state { WAITING=1, DATA_READY };
+enum state programState = WAITING;
+
 #define STACKSIZE 2048
 Char taskStack[STACKSIZE];
 /*Char task2Stack[STACKSIZE];*/
+Char uartTaskStack[STACKSIZE];
 
 //global variables for states
-static int EAT = 1;
-static int EXERCISE = 1;
-static int PET = 1;
+static int EAT = 0;
+static int EXERCISE = 0;
+static int PET = 0;
 
 // Button and LED global variables
 static PIN_Handle buttonHandle;
@@ -91,37 +80,50 @@ PIN_Config ledConfig[] = {
    PIN_TERMINATE
 };
 
+// From laboratory exercises
+Void uartTaskFxn(UArg arg0, UArg arg1) {
+
+    UART_Handle uart;
+    UART_Params uartParams;
+
+    UART_Params_init(&uartParams);
+    uartParams.writeDataMode = UART_DATA_TEXT;
+    uartParams.readDataMode = UART_DATA_TEXT;
+    uartParams.readEcho = UART_ECHO_OFF;
+    uartParams.readMode=UART_MODE_BLOCKING;
+    uartParams.baudRate = 9600;
+    uartParams.dataLength = UART_LEN_8;
+    uartParams.parityType = UART_PAR_NONE;
+    uartParams.stopBits = UART_STOP_ONE;
+
+    uart = UART_open(Board_UART0, &uartParams);
+    if (uart == NULL) {
+        System_abort("Error opening the UART");
+    }
+
+    while (1) {
+        if (programState == DATA_READY){
+            char str[100];
+            sprintf(str, "ACTIVATE:%d;%d;%d\n\r\0", EAT, EXERCISE, PET);
+            System_printf(str);
+            System_flush();
+
+            UART_write(uart, str, strlen(str));
+            PET = 0;
+            EAT = 0;
+            EXERCISE = 0;
+        }
+
+        // Once per second, you can modify this
+        Task_sleep(5000000 / Clock_tickPeriod);
+    }
+}
+
 void activate(int eatValue, int petValue, int exerciseValue){
 
-    if (PET < 10){
-        PET += petValue;
-    } else if (PET >= 10){
-        System_printf("Tamagotchi doesn't want any more pets!\n");
-        System_flush();
-    }
-
-    if (EAT < 10){
-        EAT += eatValue;
-    } else if (EAT >= 10){
-        System_printf("Tamagotchi doesn't want to eat any more!\n");
-        System_flush();
-    }
-
-
-    if (EXERCISE < 10){
-        EXERCISE += exerciseValue;
-    } else if (EXERCISE >= 10){
-        System_printf("Tamagotchi is tired from exercising.\n");
-        System_flush();
-    }
-
-    if (EAT < 1){
-        EAT = 1;
-    } else if (PET < 1){
-        PET = 1;
-    } else if (EXERCISE < 1){
-        EXERCISE = 1;
-    }
+    PET += petValue;
+    EAT += eatValue;
+    EXERCISE += exerciseValue;
 
     System_printf("Current values, EAT: %d, PET: %d, EXERCISE: %d\n", EAT, PET, EXERCISE);
     System_flush();
@@ -134,7 +136,7 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     pinValue = !pinValue;
     PIN_setOutputValue( ledHandle, Board_LED1, pinValue );
 
-    activate(0,1,0);
+    //activate(0,1,0);
 
 }
 
@@ -189,22 +191,28 @@ void mpuFxn(UArg arg0, UArg arg1) {
 
         // MPU ask data
         mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
+        programState = DATA_READY;
         time++;
         fprintf(fpt,"%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", time, ax, ay, az, gx, gy, gz);
         // Sleep 100ms
 
-        if (gy >= 50){
+        if (abs(gy) >= 70){
             activate(0,0,1);
         }
 
-        if (gz >= 10){
+        if (abs(gz) >= 70){
             activate(1,0,0);
         }
+
+        if (abs(gx) >= 150){
+                    activate(0,1,0);
+                }
+
         Task_sleep(300000 / Clock_tickPeriod);
     }
 }
 
-void valueReduce(UArg arg0, UArg arg1){
+/*void valueReduce(UArg arg0, UArg arg1){
     while (1){
         Task_sleep(5000000 / Clock_tickPeriod);
         activate(0,-1,0);
@@ -220,28 +228,29 @@ void valueReduce(UArg arg0, UArg arg1){
         System_flush();
         Task_sleep(5000000 / Clock_tickPeriod);
     }
-}
+}*/
 
 /*Void bzrFxn(UArg arg0, UArg arg1) {
-
   while (1) {
     buzzerOpen(hBuzzer);
     buzzerSetFrequency(2000);
     Task_sleep(50000 / Clock_tickPeriod);
     buzzerClose();
-
     Task_sleep(950000 / Clock_tickPeriod);
   }
-
 }*/
 
 int main (void){
 
-    Task_Handle task, task1/*, task2*/;
-    Task_Params taskParams, task1Params/*, task2Params*/;
+    Task_Handle task/*, task1, task2*/;
+    Task_Params taskParams/*, task1Params, task2Params*/;
+    Task_Handle uartTaskHandle;
+    Task_Params uartTaskParams;
 
     Board_initGeneral();
     Board_initI2C();
+    Init6LoWPAN();
+    Board_initUART();
 
     buttonHandle = PIN_open(&buttonState, buttonConfig);
     if(!buttonHandle) {
@@ -274,11 +283,11 @@ int main (void){
             System_abort("Task create failed!");
         }
 
-    Task_Params_init(&task1Params);
+    /*Task_Params_init(&task1Params);
     task1 = Task_create((Task_FuncPtr)valueReduce, &task1Params, NULL);
     if (task1 == NULL) {
         System_abort("Task1 create failed!");
-    }
+    }*/
 
     /*Task_Params_init(&task2Params);
     taskParams.stackSize = STACKSIZE;
@@ -287,6 +296,15 @@ int main (void){
     if (task2 == NULL) {
       System_abort("Task2 create failed!");
     }*/
+
+    Task_Params_init(&uartTaskParams);
+    uartTaskParams.stackSize = STACKSIZE;
+    uartTaskParams.stack = &uartTaskStack;
+    uartTaskParams.priority=2;
+    uartTaskHandle = Task_create(uartTaskFxn, &uartTaskParams, NULL);
+    if (uartTaskHandle == NULL) {
+        System_abort("Task create failed!");
+    }
 
 
     /*Sanity check*/
