@@ -106,11 +106,11 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
     while (1) {
         if (programState == DATA_READY){
             char str[100];
-            sprintf(str, "ACTIVATE:%d;%d;%d\n\r\0", EAT, EXERCISE, PET);
+            sprintf(str, "id:2068,ACTIVATE:%d;%d;%d,ping\0", EAT, EXERCISE, PET);
             System_printf(str);
             System_flush();
 
-            UART_write(uart, str, strlen(str));
+            UART_write(uart, str, strlen(str) + 1);
             buzzerState2 = BUZZER2;
             PET = 0;
             EAT = 0;
@@ -182,7 +182,7 @@ void mpuFxn(UArg arg0, UArg arg1) {
     System_flush();
 
     //Remember to change the filepath to your own!
-    fpt = fopen("D:/ti/workspace/empty_CC2650STK_TI/defaultdata1.csv", "w");
+    fpt = fopen("C:/Users/Tommi/workspace_v12/empty_CC2650STK_TI/read.csv", "w");
 
     if (!fpt) {
             System_printf("Can't open file.\n");
