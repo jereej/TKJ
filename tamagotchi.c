@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
-
+#include <string.h>
 /* XDCtools files */
 #include <xdc/std.h>
 #include <xdc/runtime/System.h>
@@ -24,10 +24,12 @@
 #include "sensors/mpu9250.h"
 #include "buzzer.h"
 
-enum state { WAITING=1, DATA_READY, BUZZER, BUZZER2 };
+enum state { WAITING=1, DATA_READY, BUZZER, BUZZER2, BUZZER3, NEWDATA };
 enum state programState = WAITING;
 enum state buzzerState = BUZZER;
 enum state buzzerState2 = BUZZER2;
+enum state buzzerState3 = BUZZER3;
+enum state readState = WAITING;
 
 #define STACKSIZE 2048
 Char taskStack[STACKSIZE];
@@ -82,43 +84,77 @@ PIN_Config ledConfig[] = {
    PIN_TERMINATE
 };
 
+
+static void uartReadFxn(UART_Handle handle, void *rxBuf, size_t len){
+    readState = NEWDATA;
+    UART_read(handle, rxBuf, len);
+}
+
 // From laboratory exercises
 Void uartTaskFxn(UArg arg0, UArg arg1) {
 
     UART_Handle uart;
     UART_Params uartParams;
 
+
     UART_Params_init(&uartParams);
     uartParams.writeDataMode = UART_DATA_TEXT;
     uartParams.readDataMode = UART_DATA_TEXT;
-    uartParams.readEcho = UART_ECHO_OFF;
-    uartParams.readMode=UART_MODE_BLOCKING;
+    uartParams.readEcho = UART_ECHO_ON;
+    uartParams.readMode=UART_MODE_CALLBACK;
+    uartParams.readCallback=&uartReadFxn;
     uartParams.baudRate = 9600;
     uartParams.dataLength = UART_LEN_8;
     uartParams.parityType = UART_PAR_NONE;
     uartParams.stopBits = UART_STOP_ONE;
+
+    char str[80];
+    char recievedStr[80];
+    int tick = 0;
+    char id[5] = "2068";
 
     uart = UART_open(Board_UART0, &uartParams);
     if (uart == NULL) {
         System_abort("Error opening the UART");
     }
 
+    UART_read(uart, recievedStr, sizeof(recievedStr));
+
     while (1) {
         if (programState == DATA_READY){
-            char str[100];
-            sprintf(str, "id:2068,ACTIVATE:%d;%d;%d,ping\0", EAT, EXERCISE, PET);
-            System_printf(str);
-            System_flush();
+            char input[80];
 
-            UART_write(uart, str, strlen(str) + 1);
-            buzzerState2 = BUZZER2;
-            PET = 0;
-            EAT = 0;
-            EXERCISE = 0;
+            if (tick == 50){
+                sprintf(str, "id:2068,ACTIVATE:%d;%d;%d\0", EAT, EXERCISE, PET);
+                System_printf(str);
+                System_flush();
+                UART_write(uart, str, strlen(str) + 1);
+                buzzerState2 = BUZZER2;
+                PET = 0;
+                EAT = 0;
+                EXERCISE = 0;
+                tick = 0;
+            }
+
+
+            //UART_read(uart, &input, sizeof(input)/sizeof(input[0]));
+            if (readState == NEWDATA){
+                sprintf(input,"%s\n",recievedStr);
+                if (input[0] == id[0] && input[1] == id[1] && input[2] == id[2] && input[3] == id[3]){
+                    System_printf(input);
+                    System_flush();
+                    buzzerState3 = BUZZER3;
+                    readState = WAITING;
+                }
+
+
+            }
+
         }
 
         // Once per second, you can modify this
-        Task_sleep(5000000 / Clock_tickPeriod);
+        tick++;
+        Task_sleep(100000 / Clock_tickPeriod);
     }
 }
 
@@ -139,7 +175,7 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     pinValue = !pinValue;
     PIN_setOutputValue( ledHandle, Board_LED1, pinValue );
 
-    //activate(0,1,0);
+    activate(0,1,0);
     buzzerState = BUZZER;
 
 }
@@ -148,7 +184,7 @@ void mpuFxn(UArg arg0, UArg arg1) {
 
     float ax, ay, az, gx, gy, gz;
     uint16_t time = 0;
-    FILE *fpt;
+    //FILE *fpt;
 
     I2C_Handle i2cMPU;
     I2C_Params i2cMPUParams;
@@ -182,14 +218,12 @@ void mpuFxn(UArg arg0, UArg arg1) {
     System_flush();
 
     //Remember to change the filepath to your own!
-    fpt = fopen("C:/Users/Tommi/workspace_v12/empty_CC2650STK_TI/read.csv", "w");
-
+    /*fpt = fopen("D:/ti/workspace/empty_CC2650STK_TI/defaultdata1.csv", "w");
     if (!fpt) {
             System_printf("Can't open file.\n");
             System_flush();
         }
-
-    fprintf(fpt, "time,ax,ay,az,gx,gy,gz\n");
+    fprintf(fpt, "time,ax,ay,az,gx,gy,gz\n"); */
     // Loop forever
     while (1) {
 
@@ -197,20 +231,22 @@ void mpuFxn(UArg arg0, UArg arg1) {
         mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
         programState = DATA_READY;
         time++;
-        fprintf(fpt,"%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", time, ax, ay, az, gx, gy, gz);
+        //fprintf(fpt,"%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", time, ax, ay, az, gx, gy, gz);
         // Sleep 100ms
 
-        if (abs(gy) >= 70){
+
+        // Our cable isn't great so can't lift it up a lot or else it will disconnect
+        if (abs(gy) >= 30){
             activate(0,0,1);
 
         }
 
-        if (abs(gz) >= 70){
+        if (abs(gz) >= 30){
             activate(1,0,0);
 
         }
 
-        if (abs(gx) >= 150){
+        if (abs(gx) >= 30){
             activate(0,1,0);
 
         }
@@ -256,7 +292,17 @@ Void bzrFxn(UArg arg0, UArg arg1) {
         buzzerState2 = WAITING;
         }
 
+    else if (buzzerState3 == BUZZER3){
 
+            buzzerOpen(hBuzzer);
+            buzzerSetFrequency(420);
+            Task_sleep(103000 / Clock_tickPeriod);
+            buzzerSetFrequency(666);
+            Task_sleep(103000 / Clock_tickPeriod);
+            buzzerClose();
+            Task_sleep(950000 / Clock_tickPeriod);
+            buzzerState3 = WAITING;
+            }
   }
 }
 
