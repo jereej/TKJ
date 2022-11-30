@@ -1,3 +1,5 @@
+/* Authors: Jere Jacklin, Tommi Jokinen, Jeremias Nevalainen */
+
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
@@ -5,7 +7,6 @@
 /* XDCtools files */
 #include <xdc/std.h>
 #include <xdc/runtime/System.h>
-
 /* BIOS Header files */
 #include <ti/sysbios/BIOS.h>
 #include <ti/sysbios/knl/Clock.h>
@@ -17,7 +18,6 @@
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
 #include <ti/drivers/UART.h>
-
 /* Board Header files */
 #include "Board.h"
 #include "wireless/comm_lib.h"
@@ -93,26 +93,23 @@ static void uartReadFxn(UART_Handle handle, void *rxBuf, size_t len){
 // From laboratory exercises
 Void uartTaskFxn(UArg arg0, UArg arg1) {
 
+    char str[80];
+    char recievedStr[80];
+    int tick = 0;
+    char id[5] = "2068";
+
     UART_Handle uart;
     UART_Params uartParams;
-
-
     UART_Params_init(&uartParams);
     uartParams.writeDataMode = UART_DATA_TEXT;
     uartParams.readDataMode = UART_DATA_TEXT;
-    uartParams.readEcho = UART_ECHO_ON;
+    uartParams.readEcho = UART_ECHO_OFF;
     uartParams.readMode=UART_MODE_CALLBACK;
-    uartParams.readReturnMode = UART_RETURN_FULL;
     uartParams.readCallback=&uartReadFxn;
     uartParams.baudRate = 9600;
     uartParams.dataLength = UART_LEN_8;
     uartParams.parityType = UART_PAR_NONE;
     uartParams.stopBits = UART_STOP_ONE;
-
-    char str[80];
-    char recievedStr[80];
-    int tick = 0;
-    char id[5] = "2068";
 
     uart = UART_open(Board_UART0, &uartParams);
     if (uart == NULL) {
@@ -137,8 +134,6 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
                 tick = 0;
             }
 
-
-            //UART_read(uart, &input, sizeof(input)/sizeof(input[0]));
             if (readState == NEWDATA){
                 sprintf(input,"%s\n",recievedStr);
                 if (input[0] == id[0] && input[1] == id[1] && input[2] == id[2] && input[3] == id[3]){
@@ -147,13 +142,8 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
                     buzzerState3 = BUZZER3;
                     readState = WAITING;
                 }
-
-
             }
-
         }
-
-        // Once per second, you can modify this
         tick++;
         Task_sleep(100000 / Clock_tickPeriod);
     }
@@ -165,7 +155,7 @@ void activate(int eatValue, int petValue, int exerciseValue){
     EAT += eatValue;
     EXERCISE += exerciseValue;
 
-    System_printf("Current values, EAT: %d, PET: %d, EXERCISE: %d\n", EAT, PET, EXERCISE);
+    System_printf("Sending: EAT: %d, EXERCISE: %d, PET: %d \n", EAT, EXERCISE, PET);
     System_flush();
 
 }
@@ -192,7 +182,6 @@ void mpuFxn(UArg arg0, UArg arg1) {
 
     I2C_Params_init(&i2cMPUParams);
     i2cMPUParams.bitRate = I2C_400kHz;
-    // Note the different configuration below
     i2cMPUParams.custom = (uintptr_t)&i2cMPUCfg;
 
     // MPU power on
@@ -237,17 +226,17 @@ void mpuFxn(UArg arg0, UArg arg1) {
 
 
         // Our cable isn't great so can't lift it up a lot or else it will disconnect
-        if (abs(gy) >= 30){
+        if (abs(gy) >= 60){
             activate(0,0,1);
 
         }
 
-        if (abs(gz) >= 30){
+        if (abs(gz) >= 50){
             activate(1,0,0);
 
         }
 
-        if (abs(gx) >= 30){
+        if (abs(gx) >= 80){
             activate(0,1,0);
 
         }
@@ -259,7 +248,7 @@ void mpuFxn(UArg arg0, UArg arg1) {
 Void bzrFxn(UArg arg0, UArg arg1) {
   while (1) {
     if (buzzerState == BUZZER){
-
+    // Android notification sound
     buzzerOpen(hBuzzer);
     buzzerSetFrequency(494);
     Task_sleep(207000 / Clock_tickPeriod);
