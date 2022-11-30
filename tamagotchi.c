@@ -102,6 +102,7 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
     uartParams.readDataMode = UART_DATA_TEXT;
     uartParams.readEcho = UART_ECHO_ON;
     uartParams.readMode=UART_MODE_CALLBACK;
+    uartParams.readReturnMode = UART_RETURN_FULL;
     uartParams.readCallback=&uartReadFxn;
     uartParams.baudRate = 9600;
     uartParams.dataLength = UART_LEN_8;
